@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>秀成长</title>
+    <script src="https://cdn.staticfile.net/vue/3.3.4/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        #app { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        h1 { color: #3498db; }
+        .input-group { text-align: left; margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #7f8c8d; }
+        input, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
+        .btn { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        .status { margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>🌱 秀成长</h1>
+        <div class="input-group">
+            <label>你叫啥？</label>
+            <input type="text" v-model="name">
+        </div>
+        <div class="input-group">
+            <label>你说啥？</label>
+            <textarea v-model="text" rows="4"></textarea>
+        </div>
+        <button class="btn" @click="send">🚀 发射想法</button>
+        <div class="status">{{ status }}</div>
+    </div>
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        createApp({
+            setup() {
+                const name = ref(localStorage.getItem('stuName') || '');
+                const text = ref('');
+                const status = ref('正在连接回音壁...');
+                let client, topic;
+                onMounted(() => {
+                    topic = new URLSearchParams(window.location.search).get('topic');
+                    client = mqtt.connect('wss://05d1d5baec9d4cb3a21f5517b430cff1.s1.eu.hivemq.cloud:8884/mqtt', { username: 'classpro', password: 'Classpro2026', clientId: 'stu_' + Math.random() });
+                    client.on('connect', () => status.value = '🟢 已连接回音壁');
+                });
+                const send = () => {
+                    if (!name.value || !text.value) return alert('名字和内容都要写哦！');
+                    localStorage.setItem('stuName', name.value);
+                    const msg = { name: name.value, text: text.value, time: new Date().toLocaleTimeString() };
+                    client.publish(topic, JSON.stringify(msg), () => {
+                        status.value = '✅ 发射成功！';
+                        text.value = '';
+                        setTimeout(() => status.value = '🟢 已连接回音壁', 2000);
+                    });
+                };
+                return { name, text, send, status };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
