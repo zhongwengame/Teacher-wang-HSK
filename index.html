@@ -3,60 +3,210 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>秀成长</title>
+    <title>课堂互动终端</title>
     <script src="https://cdn.staticfile.net/vue/3.3.4/vue.global.prod.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
-        #app { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h1 { color: #3498db; }
-        .input-group { text-align: left; margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; color: #7f8c8d; }
-        input, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; }
-        .btn { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .status { margin-top: 15px; font-size: 14px; }
+        :root {
+            --team-wei: #e53935; --team-shu: #43a047; --team-wu: #1e88e5;
+            --primary-blue: #3498db; --bg: #f4f7f6; --card-bg: #ffffff;
+            --text-dark: #2c3e50; --text-light: #7f8c8d;
+        }
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
+        #app { background: var(--card-bg); width: 100%; max-width: 420px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; overflow: hidden; display: flex; flex-direction: column; min-height: 80vh; max-height: 95vh; }
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 25px; }
+        .status-bar { padding: 10px; font-size: 14px; font-weight: 500; transition: all 0.3s; }
+        .status-bar.connected { background: #2ecc71; color: white; }
+        .status-bar.disconnected { background: #f39c12; color: white; }
+        h1 { color: var(--primary-blue); margin: 0 0 20px; font-size: 24px; }
+        
+        /* Team Selection */
+        .team-selection-view h1 { margin-bottom: 15px; }
+        .team-selection-view p { color: var(--text-light); margin: 0 0 25px; }
+        .team-buttons { display: flex; flex-direction: column; gap: 15px; }
+        .team-btn { padding: 18px; font-size: 20px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; transition: transform 0.2s; }
+        .team-btn:active { transform: scale(0.95); }
+        .team-btn.wei { background: var(--team-wei); }
+        .team-btn.shu { background: var(--team-shu); }
+        .team-btn.wu { background: var(--team-wu); }
+
+        /* Echo Wall */
+        .input-group { text-align: left; margin-bottom: 15px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: var(--text-light); }
+        input, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 10px; box-sizing: border-box; font-size: 16px; transition: border-color 0.3s; }
+        input:focus, textarea:focus { border-color: var(--primary-blue); outline: none; }
+        .send-btn { width: 100%; padding: 15px; background: var(--primary-blue); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
+
+        /* Jeopardy Buzzer */
+        .jeopardy-view { flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
+        .player-info { background: #ecf0f1; padding: 8px 15px; border-radius: 12px; font-size: 16px; font-weight: bold; }
+        .player-info .team-name { font-weight: 900; }
+        .buzzer-status { font-size: 24px; font-weight: bold; color: var(--text-dark); min-height: 60px; display:flex; align-items:center; justify-content:center; }
+        .buzzer-btn { width: 220px; height: 220px; border-radius: 50%; border: 10px solid rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; font-size: 60px; color: white; font-weight: 900; text-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; transition: all 0.2s ease; user-select: none; }
+        .buzzer-btn.inactive { background: #bdc3c7 !important; cursor: not-allowed; transform: scale(0.95); box-shadow: none; }
+        .buzzer-btn:not(.inactive):active { transform: scale(0.9); }
     </style>
 </head>
 <body>
-    <div id="app">
-        <h1>🌱 秀成长</h1>
-        <div class="input-group">
-            <label>你叫啥？</label>
-            <input type="text" v-model="name">
+<div id="app">
+    <div class="status-bar" :class="connectionStatus.class">{{ connectionStatus.text }}</div>
+    
+    <div class="main-content" v-if="!team">
+        <div class="team-selection-view">
+            <h1>加入阵营</h1>
+            <p>选择你的队伍，参加“诸神之战”！</p>
+            <div class="input-group">
+                <label>你的大名？</label>
+                <input type="text" v-model="name" placeholder="请输入你的名字">
+            </div>
+            <div class="team-buttons">
+                <button class="team-btn wei" @click="selectTeam('wei')">魏 (红队)</button>
+                <button class="team-btn shu" @click="selectTeam('shu')">蜀 (绿队)</button>
+                <button class="team-btn wu" @click="selectTeam('wu')">吴 (蓝队)</button>
+            </div>
         </div>
-        <div class="input-group">
-            <label>你说啥？</label>
-            <textarea v-model="text" rows="4"></textarea>
-        </div>
-        <button class="btn" @click="send">🚀 发射想法</button>
-        <div class="status">{{ status }}</div>
     </div>
-    <script>
-        const { createApp, ref, onMounted } = Vue;
-        createApp({
-            setup() {
-                const name = ref(localStorage.getItem('stuName') || '');
-                const text = ref('');
-                const status = ref('正在连接回音壁...');
-                let client, topic;
-                onMounted(() => {
-                    topic = new URLSearchParams(window.location.search).get('topic');
-                    client = mqtt.connect('wss://05d1d5baec9d4cb3a21f5517b430cff1.s1.eu.hivemq.cloud:8884/mqtt', { username: 'classpro', password: 'Classpro2026', clientId: 'stu_' + Math.random() });
-                    client.on('connect', () => status.value = '🟢 已连接回音壁');
+
+    <div class="main-content" v-else>
+        <!-- Mode 1: Jeopardy Buzzer -->
+        <div v-if="mode === 'jeopardy'" class="jeopardy-view">
+            <div class="player-info">
+                <span :style="{ color: teamColors[team] }" class="team-name">【{{ teamNames[team] }}】</span> {{ name }}
+            </div>
+            <div class="buzzer-status">{{ jeopardyStatus }}</div>
+            <div class="buzzer-btn" 
+                 @click="buzzIn"
+                 :class="{ inactive: !isBuzzerActive }"
+                 :style="{ background: teamColors[team], boxShadow: isBuzzerActive ? `0 0 35px ${teamColors[team]}` : 'none' }">
+                 抢
+            </div>
+        </div>
+
+        <!-- Mode 2: Echo Wall -->
+        <div v-if="mode === 'echoWall'" class="echo-wall-view">
+            <h1>🌱 秀成长</h1>
+            <div class="input-group">
+                <label>你说啥？ ({{ name }})</label>
+                <textarea v-model="text" rows="5" placeholder="把你的想法发射到大屏幕！"></textarea>
+            </div>
+            <button class="send-btn" @click="send">🚀 发射想法</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted, computed } = Vue;
+    createApp({
+        setup() {
+            // --- Core State ---
+            const name = ref(localStorage.getItem('stuName') || '');
+            const team = ref(localStorage.getItem('stuTeam') || null);
+            const text = ref('');
+            const status = ref('正在连接服务器...');
+            const mode = ref('echoWall'); // 'echoWall' or 'jeopardy'
+            let client, topic;
+
+            // --- Jeopardy State ---
+            const isBuzzerActive = ref(false);
+            const jeopardyStatus = ref('等待老师开启题目');
+            const teamNames = { wei: '魏', shu: '蜀', wu: '吴' };
+            const teamColors = { wei: '#e53935', shu: '#43a047', wu: '#1e88e5' };
+
+            const connectionStatus = computed(() => {
+                if (status.value.includes('已连接')) return { class: 'connected', text: `🟢 ${status.value}` };
+                return { class: 'disconnected', text: `🟠 ${status.value}` };
+            });
+            
+            // --- MQTT Connection ---
+            onMounted(() => {
+                topic = new URLSearchParams(window.location.search).get('topic');
+                if (!topic) {
+                    status.value = "错误：缺少房间信息！";
+                    return;
+                }
+                client = mqtt.connect('wss://05d1d5baec9d4cb3a21f5517b430cff1.s1.eu.hivemq.cloud:8884/mqtt', { 
+                    username: 'classpro', 
+                    password: 'Classpro2026', 
+                    clientId: 'stu_' + Math.random().toString(16).substr(2, 8) 
                 });
-                const send = () => {
-                    if (!name.value || !text.value) return alert('名字和内容都要写哦！');
-                    localStorage.setItem('stuName', name.value);
-                    const msg = { name: name.value, text: text.value, time: new Date().toLocaleTimeString() };
-                    client.publish(topic, JSON.stringify(msg), () => {
-                        status.value = '✅ 发射成功！';
-                        text.value = '';
-                        setTimeout(() => status.value = '🟢 已连接回音壁', 2000);
-                    });
-                };
-                return { name, text, send, status };
-            }
-        }).mount('#app');
-    </script>
+
+                client.on('connect', () => {
+                    status.value = '已连接，等待指令...';
+                    client.subscribe(topic);
+                });
+
+                client.on('error', () => status.value = "连接中断，请刷新");
+
+                // --- Message Handling ---
+                client.on('message', (msgTopic, message) => {
+                    if (msgTopic !== topic) return;
+                    try {
+                        const data = JSON.parse(message.toString());
+                        handleTeacherCommand(data);
+                    } catch (e) { console.error("Invalid message format", e); }
+                });
+            });
+
+            const handleTeacherCommand = (data) => {
+                switch (data.type) {
+                    case 'SWITCH_MODE':
+                        mode.value = data.mode;
+                        if(data.mode === 'jeopardy') {
+                           jeopardyStatus.value = "准备抢答...";
+                           isBuzzerActive.value = false;
+                        }
+                        break;
+                    case 'START_BUZZER':
+                        mode.value = 'jeopardy';
+                        isBuzzerActive.value = true;
+                        jeopardyStatus.value = '抢！';
+                        break;
+                    case 'STOP_BUZZER':
+                        isBuzzerActive.value = false;
+                        if (data.winnerTeam === team.value && data.winnerName === name.value) {
+                             jeopardyStatus.value = '🎉 你抢到了！';
+                        } else {
+                             jeopardyStatus.value = `【${teamNames[data.winnerTeam]}】的 ${data.winnerName} 抢到了!`;
+                        }
+                        break;
+                }
+            };
+            
+            // --- User Actions ---
+            const selectTeam = (selectedTeam) => {
+                if (!name.value.trim()) return alert('请先输入你的大名！');
+                team.value = selectedTeam;
+                localStorage.setItem('stuName', name.value);
+                localStorage.setItem('stuTeam', selectedTeam);
+            };
+
+            const send = () => {
+                if (!name.value || !text.value) return alert('内容不能为空哦！');
+                const msg = { type: 'ECHO_WALL', name: name.value, text: text.value, time: new Date().toLocaleTimeString('en-GB') };
+                client.publish(topic, JSON.stringify(msg), () => {
+                    status.value = '✅ 发射成功！';
+                    text.value = '';
+                    setTimeout(() => status.value = '已连接', 2000);
+                });
+            };
+
+            const buzzIn = () => {
+                if (!isBuzzerActive.value) return;
+                isBuzzerActive.value = false; // Prevent double-clicking
+                jeopardyStatus.value = '已抢答！等待结果...';
+                const msg = { type: 'BUZZ_IN', name: name.value, team: team.value };
+                client.publish(topic, JSON.stringify(msg));
+            };
+
+            return {
+                name, team, text, status, mode,
+                isBuzzerActive, jeopardyStatus,
+                selectTeam, send, buzzIn, connectionStatus,
+                teamNames, teamColors,
+            };
+        }
+    }).mount('#app');
+</script>
 </body>
 </html>
